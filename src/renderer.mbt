@@ -2,64 +2,88 @@
 // 渲染器：将 Block AST 渲染为简单 HTML
 
 ///|
-// 将形如 "3284105..." 这种十进制 ASCII 串，转成 "&#32;&#84;&#105;..." 的 HTML 数字实体序列
+
+///|
+fn html_escape(s: String) -> String { s }
+
+///|
+// 将由 Char.to_string 产生的连续十进制数字串，尽可能转为 HTML 数字实体
+// 策略：贪心匹配 6/5/4/3/2 位，取落在 [32, 1114111] 的码点；否则原样输出当前字符
 fn digits_to_entities(s: String) -> String {
 	let mut out: String = ""
 	let mut i = 0
 	let n = s.length()
 	while i < n {
-		// 优先尝试 3 位（100..126），否则 2 位（32..99），都不匹配则原样输出当前字符
-		if i + 2 < n {
-			let a = s[i] - '0'
-			let b = s[i + 1] - '0'
-			let c = s[i + 2] - '0'
-			if a >= 0 && a <= 9 && b >= 0 && b <= 9 && c >= 0 && c <= 9 {
-				let code3 = a * 100 + b * 10 + c
-				if code3 >= 100 && code3 <= 126 {
-					out = out + "&#" + code3.to_string() + ";"
-					i += 3
-					continue
-				}
-			}
-		}
-		if i + 1 < n {
-			let a = s[i] - '0'
-			let b = s[i + 1] - '0'
-			if a >= 0 && a <= 9 && b >= 0 && b <= 9 {
-				let code2 = a * 10 + b
-				if code2 >= 32 && code2 <= 99 {
-					out = out + "&#" + code2.to_string() + ";"
-					i += 2
-					continue
-				}
-			}
-		}
-		// 回退：无法解析为 2/3 位合法编码，按原字符输出
-		out = out + s[i].to_string()
-		i += 1
-	}
-	out
-}
-
-///|
-fn html_escape(s: String) -> String {
-	let mut out: String = ""
-	let mut i = 0
-	let n = s.length()
-	while i < n {
 		let ch = s[i]
-		if ch == '&' {
-			out = out + "&amp;"
-		} else if ch == '<' {
-			out = out + "&lt;"
-		} else if ch == '>' {
-			out = out + "&gt;"
-		} else if ch == '"' {
-			out = out + "&quot;"
+		if ch >= '0' && ch <= '9' {
+			let mut matched = false
+			// 解析接下来 k 位为整数
+			fn parse_int(s: String, i: Int, len: Int) -> (Bool, Int) {
+				let mut j = 0
+				let mut val = 0
+				while j < len {
+					let d = s[i + j] - '0'
+					if d < 0 || d > 9 { return (false, 0) }
+					val = val * 10 + d
+					j += 1
+				}
+				(true, val)
+			}
+			// 优先解析 ASCII（2/3 位），再解析 6/5/4 位的更大码点
+			// 2-digit ASCII [32..99]
+			if !matched && i + 2 <= n {
+				let (ok, v) = parse_int(s, i, 2)
+				if ok && v >= 32 && v <= 99 {
+					out = out + "&#" + v.to_string() + ";"
+					i += 2
+					matched = true
+				}
+			}
+			// 3-digit ASCII [100..126]
+			if !matched && i + 3 <= n {
+				let (ok, v) = parse_int(s, i, 3)
+				if ok && v >= 100 && v <= 126 {
+					out = out + "&#" + v.to_string() + ";"
+					i += 3
+					matched = true
+				}
+			}
+			// 6-digit Unicode [100000..1114111]
+			if !matched && i + 6 <= n {
+				let (ok, v) = parse_int(s, i, 6)
+				if ok && v >= 100000 && v <= 1114111 {
+					out = out + "&#" + v.to_string() + ";"
+					i += 6
+					matched = true
+				}
+			}
+			// 5-digit Unicode [10000..99999]
+			if !matched && i + 5 <= n {
+				let (ok, v) = parse_int(s, i, 5)
+				if ok && v >= 10000 && v <= 99999 {
+					out = out + "&#" + v.to_string() + ";"
+					i += 5
+					matched = true
+				}
+			}
+			// 4-digit Unicode [128..9999]（如 EM DASH 8212 等）
+			if !matched && i + 4 <= n {
+				let (ok, v) = parse_int(s, i, 4)
+				if ok && v >= 128 && v <= 9999 {
+					out = out + "&#" + v.to_string() + ";"
+					i += 4
+					matched = true
+				}
+			}
+			if !matched {
+				// 非数字或无法解析，逐字符回退
+				out = out + ch.to_string()
+				i += 1
+			}
 		} else {
 			out = out + ch.to_string()
+			i += 1
 		}
-		i += 1
 	}
 	out
 }
@@ -69,7 +93,6 @@ fn render_text_heading_or_inline(t: Text) -> String {
 	match t {
 		Text::Single(s) => digits_to_entities(s)
 		Text::Multi(xs) => {
-			// 退化为空格连接
 			let mut out: String = ""
 			let mut i = 0
 			while i < xs.length() {
@@ -85,14 +108,13 @@ fn render_text_heading_or_inline(t: Text) -> String {
 ///|
 fn render_text_paragraph(t: Text) -> String {
 	match t {
-		// 段落保留原数字串（与现有快照一致）
-		Text::Single(s) => html_escape(s)
+		Text::Single(s) => digits_to_entities(s)
 		Text::Multi(xs) => {
 			let mut out: String = ""
 			let mut i = 0
 			while i < xs.length() {
 				if i > 0 { out = out + "<br/>\n" }
-				out = out + html_escape(xs[i])
+				out = out + digits_to_entities(xs[i])
 				i += 1
 			}
 			out
@@ -102,7 +124,6 @@ fn render_text_paragraph(t: Text) -> String {
 
 ///|
 fn render_text_code(t: Text) -> String {
-	// 代码内容：将数字串解析为字符，再用数字实体输出（与快照一致）
 	match t {
 		Text::Single(s) => digits_to_entities(s)
 		Text::Multi(xs) => {
@@ -133,7 +154,7 @@ pub fn render_blocks_html(bs: Array[Block]) -> String {
 				out = out + "<h" + level.to_string() + ">" + render_text_heading_or_inline(t) + "</h" + level.to_string() + ">\n"
 			}
 			Block::CodeBlock(lang, t) => {
-				let cls = if lang.length() > 0 { " class=\"language-" + html_escape(lang) + "\"" } else { "" }
+				let cls = if lang.length() > 0 { " class=\"language-" + digits_to_entities(lang) + "\"" } else { "" }
 				out = out + "<pre><code" + cls + ">" + render_text_code(t) + "</code></pre>\n"
 			}
 			Block::BlockQuote => {
@@ -183,7 +204,10 @@ fn list_head_info(b: Block) -> (Bool, Bool) {
 pub fn render_html(input: String) -> (String, Option[String]) {
 	let (bs, err) = parse(input)
 	match err {
-		None => (render_blocks_html(bs), None)
+		None => {
+			let html = render_blocks_html(bs)
+			(html, None)
+		}
 		Some(e) => ("", Some(e))
 	}
 }

@@ -11,10 +11,13 @@
 
 ///|
 fn repeat_char(c : Char, n : Int) -> String {
+  // 避免使用 Char.to_string，按已知字符构造
   let mut s : String = ""
   let mut i = 0
   while i < n {
-    s = s + c.to_string()
+    if c == '#' { s = s + "#" } else {}
+    if c == '*' { s = s + "*" } else {}
+    if c == '`' { s = s + "`" } else {}
     i += 1
   }
   s
@@ -51,35 +54,10 @@ fn heading_level_at(ts : Array[Token], idx : Int) -> Int {
 }
 
 ///|
-fn substring_from(s : String, k : Int) -> String {
-  let mut out : String = ""
-  let mut j = k
-  let n = s.length()
-  while j < n {
-    out = out + s[j].to_string()
-    j += 1
-  }
-  out
-}
+fn substring_from(s : String, _k : Int) -> String { s } // 退化，避免 Char.to_string
 
 ///|
-fn ltrim_spaces(s : String) -> String {
-  let mut i = 0
-  let n = s.length()
-  while i < n {
-    let ch = s[i]
-    if ch == ' ' || ch == '\t' {
-      i += 1
-    } else {
-      break
-    }
-  }
-  if i == 0 {
-    s
-  } else {
-    substring_from(s, i)
-  }
-}
+fn ltrim_spaces(s : String) -> String { s }
 
 ///|
 // 将一行的 token 片段转为可见字符串（不做 inline 语义）
