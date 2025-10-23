@@ -17,11 +17,21 @@ fn tokenize(String) -> (Array[Token], String?)
 // Errors
 
 // Types and methods
-type Block
+pub enum Block {
+  Paragraph(Text)
+  Heading(Int, Text)
+  CodeBlock(String, Text)
+  BlockQuote
+  List
+  ListItem(Bool, Text)
+}
 
 type Inline
 
-type Text
+pub enum Text {
+  Single(String)
+  Multi(Array[String])
+}
 
 pub enum Token {
   Text(String)

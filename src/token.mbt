@@ -1,7 +1,6 @@
 ///|
 // Markdown 词法 Token 定义（MoonBit enum）
 // 先只提供稳定类型，后续分步实现 tokenizer 与 parser。
-
 pub enum Token {
   Text(String)
   Newline

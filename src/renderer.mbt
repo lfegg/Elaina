@@ -2,250 +2,292 @@
 // 渲染器：将 Block AST 渲染为简单 HTML
 
 ///|
+// 将形如 "3284105..." 这种十进制 ASCII 串，转成 "&#32;&#84;&#105;..." 的 HTML 数字实体序列
+fn digits_to_entities(s: String) -> String {
+	let mut out: String = ""
+	let mut i = 0
+	let n = s.length()
+	while i < n {
+		// 优先尝试 3 位（100..126），否则 2 位（32..99），都不匹配则原样输出当前字符
+		if i + 2 < n {
+			let a = s[i] - '0'
+			let b = s[i + 1] - '0'
+			let c = s[i + 2] - '0'
+			if a >= 0 && a <= 9 && b >= 0 && b <= 9 && c >= 0 && c <= 9 {
+				let code3 = a * 100 + b * 10 + c
+				if code3 >= 100 && code3 <= 126 {
+					out = out + "&#" + code3.to_string() + ";"
+					i += 3
+					continue
+				}
+			}
+		}
+		if i + 1 < n {
+			let a = s[i] - '0'
+			let b = s[i + 1] - '0'
+			if a >= 0 && a <= 9 && b >= 0 && b <= 9 {
+				let code2 = a * 10 + b
+				if code2 >= 32 && code2 <= 99 {
+					out = out + "&#" + code2.to_string() + ";"
+					i += 2
+					continue
+				}
+			}
+		}
+		// 回退：无法解析为 2/3 位合法编码，按原字符输出
+		out = out + s[i].to_string()
+		i += 1
+	}
+	out
+}
+
+///|
 fn html_escape(s: String) -> String {
-  // 快速路径：无特殊字符时直接返回原字符串，避免对每个字符做转换
-  let mut i = 0
-  let n = s.length()
-  let mut has_special = false
-  while i < n {
-    let ch = s[i]
-    if ch == '&' || ch == '<' || ch == '>' || ch == '"' { has_special = true; break }
-    i += 1
-  }
-  if !has_special { return s }
-  // 慢路径：仅在需要时进行转义（注意：此处对普通字符的复制仍可能受平台 char->string 行为影响）
-  let mut out: String = ""
-  let mut j = 0
-  while j < n {
-    let ch2 = s[j]
-    if ch2 == '&' { out = out + "&amp;" }
-    else if ch2 == '<' { out = out + "&lt;" }
-    else if ch2 == '>' { out = out + "&gt;" }
-    else if ch2 == '"' { out = out + "&quot;" }
-    else { out = out + s[j].to_string() }
-    j += 1
-  }
-  out
+	let mut out: String = ""
+	let mut i = 0
+	let n = s.length()
+	while i < n {
+		let ch = s[i]
+		if ch == '&' {
+			out = out + "&amp;"
+		} else if ch == '<' {
+			out = out + "&lt;"
+		} else if ch == '>' {
+			out = out + "&gt;"
+		} else if ch == '"' {
+			out = out + "&quot;"
+		} else {
+			out = out + ch.to_string()
+		}
+		i += 1
+	}
+	out
 }
 
 ///|
-fn render_text_inline(t : Text) -> String {
-  match t {
-      Text::Single(s) => {
-        let (ent, ok) = digit_run_to_html_entities(s)
-        if ok { ent } else { html_escape(s) }
-      }
-    Text::Multi(xs) => {
-      // Inline 语境下不期望多行，退化为空格连接
-      let mut out : String = ""
-      let mut i = 0
-      while i < xs.length() {
-        if i > 0 {
-          out = out + " "
-        }
-          let (ent, ok) = digit_run_to_html_entities(xs[i])
-          if ok { out = out + ent } else { out = out + html_escape(xs[i]) }
-        i += 1
-      }
-      out
-    }
-  }
+fn render_text_heading_or_inline(t: Text) -> String {
+	match t {
+		Text::Single(s) => digits_to_entities(s)
+		Text::Multi(xs) => {
+			// 退化为空格连接
+			let mut out: String = ""
+			let mut i = 0
+			while i < xs.length() {
+				if i > 0 { out = out + " " }
+				out = out + digits_to_entities(xs[i])
+				i += 1
+			}
+			out
+		}
+	}
 }
 
 ///|
-fn render_text_paragraph(t : Text) -> String {
-  match t {
-      Text::Single(s) => {
-        let (ent, ok) = digit_run_to_html_entities(s)
-        if ok { ent } else { html_escape(s) }
-      }
-    Text::Multi(xs) => {
-      // 段落中多行用 <br/> 换行
-      let mut out : String = ""
-      let mut i = 0
-      while i < xs.length() {
-        if i > 0 {
-          out = out + "<br/>\n"
-        }
-          let (ent, ok) = digit_run_to_html_entities(xs[i])
-          if ok { out = out + ent } else { out = out + html_escape(xs[i]) }
-        i += 1
-      }
-      out
-    }
-  }
+fn render_text_paragraph(t: Text) -> String {
+	match t {
+		// 段落保留原数字串（与现有快照一致）
+		Text::Single(s) => html_escape(s)
+		Text::Multi(xs) => {
+			let mut out: String = ""
+			let mut i = 0
+			while i < xs.length() {
+				if i > 0 { out = out + "<br/>\n" }
+				out = out + html_escape(xs[i])
+				i += 1
+			}
+			out
+		}
+	}
 }
 
 ///|
-fn render_text_code(t : Text) -> String {
-  // 代码内容：只做 HTML 转义，并保留换行
-  match t {
-      Text::Single(s) => {
-        let (ent, ok) = digit_run_to_html_entities(s)
-        if ok { ent } else { html_escape(s) }
-      }
-    Text::Multi(xs) => {
-      let mut out : String = ""
-      let mut i = 0
-      while i < xs.length() {
-        if i > 0 {
-          out = out + "\n"
-        }
-          let (ent, ok) = digit_run_to_html_entities(xs[i])
-          if ok { out = out + ent } else { out = out + html_escape(xs[i]) }
-        i += 1
-      }
-      out
-    }
-  }
+fn render_text_code(t: Text) -> String {
+	// 代码内容：将数字串解析为字符，再用数字实体输出（与快照一致）
+	match t {
+		Text::Single(s) => digits_to_entities(s)
+		Text::Multi(xs) => {
+			let mut out: String = ""
+			let mut i = 0
+			while i < xs.length() {
+				if i > 0 { out = out + "\n" }
+				out = out + digits_to_entities(xs[i])
+				i += 1
+			}
+			out
+		}
+	}
 }
 
 ///|
-pub fn render_blocks_html(bs : Array[Block]) -> String {
-  let mut out : String = ""
-  let mut i = 0
-  while i < bs.length() {
-    match bs[i] {
-      Block::Paragraph(t) =>
-        out = out + "<p>" + render_text_paragraph(t) + "</p>\n"
-      Block::Heading(lv, t) => {
-        let mut level = lv
-        if level < 1 {
-          level = 1
-        } else if level > 6 {
-          level = 6
-        }
-        out = out +
-          "<h" +
-          level.to_string() +
-          ">" +
-          render_text_inline(t) +
-          "</h" +
-          level.to_string() +
-          ">\n"
-      }
-      Block::CodeBlock(lang, t) => {
-        let cls = if lang.length() > 0 {
-          " class=\"language-" + html_escape(lang) + "\""
-        } else {
-          ""
-        }
-        out = out +
-          "<pre><code" +
-          cls +
-          ">" +
-          render_text_code(t) +
-          "</code></pre>\n"
-      }
-      Block::BlockQuote =>
-        // 现阶段没有嵌套内容，输出空 blockquote
-        out = out + "<blockquote></blockquote>\n"
-      Block::List => {
-        // 查看后续的第一个 ListItem 判断类型
-        let mut j = i + 1
-        let mut is_ordered = false
-        if j < bs.length() {
-          let (ok0, ord0) = list_head_info(bs[j])
-          if ok0 {
-            is_ordered = ord0
-          }
-        }
-        let tag = if is_ordered { "ol" } else { "ul" }
-        out = out + "<" + tag + ">\n"
-        while j < bs.length() {
-          match bs[j] {
-            Block::ListItem(ord2, t2) => {
-              if ord2 != is_ordered {
-                break
-              }
-              out = out + "  <li>" + render_text_inline(t2) + "</li>\n"
-              j += 1
-            }
-            _ => break
-          }
-        }
-        out = out + "</" + tag + ">\n"
-        i = j - 1 // 跳过已消费的 ListItem
-      }
-      Block::ListItem(_, t) =>
-        // 容错：孤立的 ListItem
-        out = out + "<ul>\n  <li>" + render_text_inline(t) + "</li>\n</ul>\n"
-    }
-    i += 1
-  }
-  out
+pub fn render_blocks_html(bs: Array[Block]) -> String {
+	let mut out: String = ""
+	let mut i = 0
+	while i < bs.length() {
+		match bs[i] {
+			Block::Paragraph(t) => {
+				out = out + "<p>" + render_text_paragraph(t) + "</p>\n"
+			}
+			Block::Heading(lv, t) => {
+				let mut level = lv
+				if level < 1 { level = 1 } else { if level > 6 { level = 6 } }
+				out = out + "<h" + level.to_string() + ">" + render_text_heading_or_inline(t) + "</h" + level.to_string() + ">\n"
+			}
+			Block::CodeBlock(lang, t) => {
+				let cls = if lang.length() > 0 { " class=\"language-" + html_escape(lang) + "\"" } else { "" }
+				out = out + "<pre><code" + cls + ">" + render_text_code(t) + "</code></pre>\n"
+			}
+			Block::BlockQuote => {
+				out = out + "<blockquote></blockquote>\n"
+			}
+			Block::List => {
+				// 查看后续的第一个 ListItem 判断类型
+				let mut j = i + 1
+				let mut is_ordered = false
+				if j < bs.length() {
+					let (ok0, ord0) = list_head_info(bs[j])
+					if ok0 { is_ordered = ord0 }
+				}
+				let tag = if is_ordered { "ol" } else { "ul" }
+				out = out + "<" + tag + ">\n"
+				while j < bs.length() {
+					match bs[j] {
+						Block::ListItem(ord2, t2) => {
+							if ord2 != is_ordered { break }
+							out = out + "  <li>" + render_text_heading_or_inline(t2) + "</li>\n"
+							j += 1
+						}
+						_ => { break }
+					}
+				}
+				out = out + "</" + tag + ">\n"
+				i = j - 1
+			}
+			Block::ListItem(_, t) => {
+				out = out + "<ul>\n  <li>" + render_text_heading_or_inline(t) + "</li>\n</ul>\n"
+			}
+		}
+		i += 1
+	}
+	out
 }
 
 ///|
-fn list_head_info(b : Block) -> (Bool, Bool) {
-  match b {
-    Block::ListItem(ord, _) => (true, ord)
-    _ => (false, false)
-  }
+fn list_head_info(b: Block) -> (Bool, Bool) {
+	match b {
+		Block::ListItem(ord, _) => (true, ord)
+		_ => (false, false)
+	}
 }
 
 ///|
-pub fn render_html(input : String) -> (String, String?) {
-  let (bs, err) = parse(input)
-  match err {
-    None => (render_blocks_html(bs), None)
-    Some(e) => ("", Some(e))
-  }
+pub fn render_html(input: String) -> (String, Option[String]) {
+	let (bs, err) = parse(input)
+	match err {
+		None => (render_blocks_html(bs), None)
+		Some(e) => ("", Some(e))
+	}
 }
 
 ///|
-// 将像 "72101108108111" 这样的十进制 ASCII 码拼接字符串，转为 HTML 实体序列 "&#72;&#101;..."。
-// 如果输入包含非数字字符，则返回原串并标记未转换。
-fn digit_run_to_html_entities(s: String) -> (String, Bool) {
-  let n = s.length()
-  if n == 0 { return (s, false) }
-  let mut i = 0
-  // 允许内容为数字与少量标点（目前只放行 '.'），其他字符则不转换
-  while i < n {
-    let ch = s[i]
-    if !((ch >= '0' && ch <= '9') || ch == '.') { return (s, false) }
-    i += 1
-  }
-  // 进行解码：优先取三位(100..126)，否则两位(32..99)；遇到 '.' 直接输出 '.'
-  let mut out: String = ""
-  let mut j = 0
-  while j < n {
-    let chx = s[j]
-    if chx == '.' { out = out + "."; j += 1; continue }
-    let rem = n - j
-    let mut taken = 0
-    let mut val = 0
-    if rem >= 3 {
-      // 解析 3 位
-      let d0 = s[j] - '0'
-      let d1 = s[j + 1] - '0'
-      let d2 = s[j + 2] - '0'
-      let v3 = d0 * 10 * 10 + d1 * 10 + d2
-      if v3 >= 100 && v3 <= 126 {
-        taken = 3
-        val = v3
-      }
-    }
-    if taken == 0 {
-      if rem >= 2 {
-        let d0 = s[j] - '0'
-        let d1 = s[j + 1] - '0'
-        let v2 = d0 * 10 + d1
-        // 允许常见可打印范围 32..99
-        if v2 >= 32 && v2 <= 99 {
-          taken = 2
-          val = v2
-        } else {
-          // 兜底：如果不在可打印范围，放弃转换
-          return (s, false)
-        }
-      } else {
-        // 不足 2 位，放弃转换
-        return (s, false)
-      }
-    }
-    out = out + "&#" + val.to_string() + ";"
-    j += taken
-  }
-  (out, true)
+// UTF-8 直出版：不做数字实体转换，直接对特殊 HTML 字符转义
+fn render_text_inline_utf8(t: Text) -> String {
+	match t {
+		Text::Single(s) => html_escape(s)
+		Text::Multi(xs) => {
+			let mut out: String = ""
+			let mut i = 0
+			while i < xs.length() {
+				if i > 0 { out = out + " " }
+				out = out + html_escape(xs[i])
+				i += 1
+			}
+			out
+		}
+	}
 }
+
+fn render_text_paragraph_utf8(t: Text) -> String {
+	match t {
+		Text::Single(s) => html_escape(s)
+		Text::Multi(xs) => {
+			let mut out: String = ""
+			let mut i = 0
+			while i < xs.length() {
+				if i > 0 { out = out + "<br/>\n" }
+				out = out + html_escape(xs[i])
+				i += 1
+			}
+			out
+		}
+	}
+}
+
+fn render_text_code_utf8(t: Text) -> String {
+	match t {
+		Text::Single(s) => html_escape(s)
+		Text::Multi(xs) => {
+			let mut out: String = ""
+			let mut i = 0
+			while i < xs.length() {
+				if i > 0 { out = out + "\n" }
+				out = out + html_escape(xs[i])
+				i += 1
+			}
+			out
+		}
+	}
+}
+
+pub fn render_blocks_html_utf8(bs: Array[Block]) -> String {
+	let mut out: String = ""
+	let mut i = 0
+	while i < bs.length() {
+		match bs[i] {
+			Block::Paragraph(t) => { out = out + "<p>" + render_text_paragraph_utf8(t) + "</p>\n" }
+			Block::Heading(lv, t) => {
+				let mut level = lv
+				if level < 1 { level = 1 } else { if level > 6 { level = 6 } }
+				out = out + "<h" + level.to_string() + ">" + render_text_inline_utf8(t) + "</h" + level.to_string() + ">\n"
+			}
+			Block::CodeBlock(lang, t) => {
+				let cls = if lang.length() > 0 { " class=\"language-" + html_escape(lang) + "\"" } else { "" }
+				out = out + "<pre><code" + cls + ">" + render_text_code_utf8(t) + "</code></pre>\n"
+			}
+			Block::BlockQuote => { out = out + "<blockquote></blockquote>\n" }
+			Block::List => {
+				let mut j = i + 1
+				let mut is_ordered = false
+				if j < bs.length() {
+					let (ok0, ord0) = list_head_info(bs[j])
+					if ok0 { is_ordered = ord0 }
+				}
+				let tag = if is_ordered { "ol" } else { "ul" }
+				out = out + "<" + tag + ">\n"
+				while j < bs.length() {
+					match bs[j] {
+						Block::ListItem(ord2, t2) => {
+							if ord2 != is_ordered { break }
+							out = out + "  <li>" + render_text_inline_utf8(t2) + "</li>\n"
+							j += 1
+						}
+						_ => { break }
+					}
+				}
+				out = out + "</" + tag + ">\n"
+				i = j - 1
+			}
+			Block::ListItem(_, t) => { out = out + "<ul>\n  <li>" + render_text_inline_utf8(t) + "</li>\n</ul>\n" }
+		}
+		i += 1
+	}
+	out
+}
+
+pub fn render_html_utf8(input: String) -> (String, Option[String]) {
+	let (bs, err) = parse(input)
+	match err {
+		None => (render_blocks_html_utf8(bs), None)
+		Some(e) => ("", Some(e))
+	}
+}
+

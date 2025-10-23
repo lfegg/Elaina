@@ -1,6 +1,6 @@
 ///|
 // 文本节点：区分单行与多行
-enum Text {
+pub enum Text {
   Single(String) // 单行文本（不包含换行）
   Multi(Array[String]) // 多行文本（每项为一行）
 }
@@ -18,7 +18,7 @@ enum Inline {
 
 ///|
 // 块级节点（Block）
-enum Block {
+pub enum Block {
   Paragraph(Text) // 段落文本：可单行或多行
   Heading(Int, Text) // 标题文本：一般单行，但用 Text 以统一模型
   CodeBlock(String, Text) // language, code：代码块通常多行
