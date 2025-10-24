@@ -8,6 +8,10 @@
     {
       "path": "tonyfettes/utf8",
       "alias": "utf8"
+    },
+    {
+      "path": "moonbitlang/x/fs",
+      "alias": "fs"
     }
   ]
 }

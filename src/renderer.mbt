@@ -307,15 +307,10 @@ pub fn render_html_page(input : String) -> (String, String?) {
 pub fn render_html_from_utf8_bytes_lossy(
   bytes : BytesView,
 ) -> (String, String?) {
-  let input = decode_lossy(bytes)
+  let input = @utf8.decode_lossy(bytes)
   render_html(input)
 }
 
 ///|
 // 严格版：UTF-8 解码失败将抛出 Malformed
-pub fn render_html_from_utf8_bytes(
-  bytes : BytesView,
-) -> (String, String?) raise Malformed {
-  let input = decode(bytes)
-  render_html(input)
-}
+
