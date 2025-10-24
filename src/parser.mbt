@@ -1,26 +1,45 @@
 ///|
-// 语法分析：将原文解析为 Block 列表（仅处理 Heading / Paragraph / fenced CodeBlock 基础形态）
-// 说明：
-// - 行切分基于 Token::Newline
-// - 标题：行首 Hash(1..6) + 可选空格 + 文本
-// - 代码块：行首 Backtick(>=3) 开始，直到下一条 Backtick(>=3) 结束；首行可带 language 标识
-// - 段落：其他非空文本行合并为段落；多行合并为 Text::Multi
+// 语法分析：使用 tokenizer.mbt 产生的 Token 流来解析为 Block 列表
+// - 标题：行首 Hash(1..6) + 可选空格 + 文本（Text/符号拼接）
+// - 围栏代码块：行首 Backtick(>=3)，直到下一个 Backtick(>=3)，首行余下作为语言标识
+// - 引用：以 GreaterThan 开头的连续行（当前作为占位 BlockQuote）
+// - 列表：无序（Dash 或 Star(1)）与有序（digits + Dot）识别并分组
+// - 段落：其余非空行按段连续合并为 Paragraph(Text::Single/Multi)
 
 ///|
-// 本文件位于与 Token/Block/Text 同一包内，可直接引用类型与函数
+// 本文件与 tokenizer/ast 同包，可直接使用 Token/Block/Text
 
 ///|
-fn repeat_char(c : Char, n : Int) -> String {
-  let mut s : String = ""
+// 空白判定：仅用于跳过 Token::Text 中的前缀空格/制表符
+fn is_spaces_only(s : String) -> Bool {
   let mut i = 0
+  let n = s.length()
   while i < n {
-    s = s + c.to_string()
-    i += 1
+    let ch = s[i]
+    if ch == ' ' || ch == '\t' {
+      i += 1
+    } else {
+      return false
+    }
   }
-  s
+  true
 }
 
 ///|
+fn skip_leading_space_tokens(ts : Array[Token], i0 : Int, end : Int) -> Int {
+  let mut i = i0
+  while i < end {
+    match ts[i] {
+      Token::Text(s) => if is_spaces_only(s) { i += 1 } else { break }
+      _ => break
+    }
+  }
+  i
+}
+
+///|
+// 读取一整行在源字符串中的边界（支持 CRLF / CR / LF）
+// Token 工具
 fn is_newline_token(t : Token) -> Bool {
   match t {
     Token::Newline => true
@@ -29,92 +48,6 @@ fn is_newline_token(t : Token) -> Bool {
 }
 
 ///|
-fn is_heading_start(ts : Array[Token], idx : Int) -> Bool {
-  if idx >= ts.length() {
-    return false
-  }
-  match ts[idx] {
-    Token::Hash(lv) => lv >= 1 && lv <= 6
-    _ => false
-  }
-}
-
-///|
-fn heading_level_at(ts : Array[Token], idx : Int) -> Int {
-  if idx >= ts.length() {
-    return 1
-  }
-  match ts[idx] {
-    Token::Hash(lv) => lv
-    _ => 1
-  }
-}
-
-///|
-fn substring_from(s : String, k : Int) -> String {
-  let mut out : String = ""
-  let mut j = k
-  let n = s.length()
-  while j < n {
-    out = out + s[j].to_string()
-    j += 1
-  }
-  out
-}
-
-///|
-fn ltrim_spaces(s : String) -> String {
-  let mut i = 0
-  let n = s.length()
-  while i < n {
-    let ch = s[i]
-    if ch == ' ' || ch == '\t' {
-      i += 1
-    } else {
-      break
-    }
-  }
-  if i == 0 {
-    s
-  } else {
-    substring_from(s, i)
-  }
-}
-
-///|
-// 将一行的 token 片段转为可见字符串（不做 inline 语义）
-fn line_tokens_to_string(ts : Array[Token], start : Int, end : Int) -> String {
-  let mut out : String = ""
-  let mut i = start
-  while i < end {
-    out = out + token_visible_text(ts[i])
-    i += 1
-  }
-  out
-}
-
-///|
-fn token_visible_text(t : Token) -> String {
-  match t {
-    Token::Text(s) => s
-    Token::Digit(n) => n.to_string()
-    Token::Dot => "."
-    Token::Dash => "-"
-    Token::GreaterThan => ">"
-    Token::Bang => "!"
-    Token::OpenBracket => "["
-    Token::CloseBracket => "]"
-    Token::OpenParen => "("
-    Token::CloseParen => ")"
-    Token::Hash(n) => repeat_char('#', n)
-    Token::Star(n) => repeat_char('*', n)
-    Token::Backtick(n) => repeat_char('`', n)
-    _ => ""
-  }
-}
-
-///|
-// 读取一整行（直到 Newline 或输入结束），返回该行开始/结束下标与是否读到换行
 fn read_line(ts : Array[Token], pos : Int) -> (Int, Int, Int, Bool) {
   let mut i = pos
   let n = ts.length()
@@ -131,21 +64,72 @@ fn read_line(ts : Array[Token], pos : Int) -> (Int, Int, Int, Bool) {
 }
 
 ///|
-// 尝试解析 fenced code block 起始行：Backtick(>=3) [lang?]
+fn repeat_str(piece : String, n : Int) -> String {
+  let mut out : String = ""
+  let mut i = 0
+  while i < n {
+    out = out + piece
+    i += 1
+  }
+  out
+}
+
+///|
+fn token_visible_text(t : Token) -> String {
+  match t {
+    Token::Text(s) => s
+    Token::Dot => "."
+    Token::Dash => "-"
+    Token::GreaterThan => ">"
+    Token::Bang => "!"
+    Token::OpenBracket => "["
+    Token::CloseBracket => "]"
+    Token::OpenParen => "("
+    Token::CloseParen => ")"
+    Token::Star(n) => repeat_str("*", n)
+    Token::Backtick(n) => repeat_str("`", n)
+    Token::Hash(n) => repeat_str("#", n)
+    _ => ""
+  }
+}
+
+///|
+fn line_tokens_to_string(ts : Array[Token], start : Int, end : Int) -> String {
+  let mut out : String = ""
+  let mut i = start
+  while i < end {
+    out = out + token_visible_text(ts[i])
+    i += 1
+  }
+  out
+}
+
+///|
+//
+
+///|
+fn is_heading_start(ts : Array[Token], ls : Int) -> (Bool, Int) {
+  match ts[ls] {
+    Token::Hash(lv) => if lv >= 1 && lv <= 6 { (true, lv) } else { (false, 0) }
+    _ => (false, 0)
+  }
+}
+
+///|
+// fence 相关
 fn try_parse_fence_start(
   ts : Array[Token],
-  lstart : Int,
-  lend : Int,
+  ls : Int,
+  le : Int,
 ) -> (Bool, Int, String) {
-  if lstart >= lend {
+  if ls >= le {
     return (false, 0, "")
   }
-  match ts[lstart] {
+  match ts[ls] {
     Token::Backtick(n) =>
       if n >= 3 {
-        // 语言标识：余下 token 的可见文本，去除前后空白
-        let raw = line_tokens_to_string(ts, lstart + 1, lend)
-        let lang = ltrim_spaces(raw)
+        let idx = skip_leading_space_tokens(ts, ls + 1, le)
+        let lang = line_tokens_to_string(ts, idx, le)
         (true, n, lang)
       } else {
         (false, 0, "")
@@ -155,6 +139,7 @@ fn try_parse_fence_start(
 }
 
 ///|
+// 尝试解析 fenced code block 起始行：Backtick(>=3) [lang?]
 fn is_blockquote_line(ts : Array[Token], ls : Int, le : Int) -> Bool {
   if ls >= le {
     return false
@@ -166,6 +151,7 @@ fn is_blockquote_line(ts : Array[Token], ls : Int, le : Int) -> Bool {
 }
 
 ///|
+// 列表项：无序（- 或 *）
 fn unordered_bullet_content_start(
   ts : Array[Token],
   ls : Int,
@@ -182,6 +168,25 @@ fn unordered_bullet_content_start(
 }
 
 ///|
+// 列表项：有序（digits + Dot）
+fn is_digits_only(s : String) -> Bool {
+  let n = s.length()
+  if n == 0 {
+    return false
+  }
+  let mut i = 0
+  while i < n {
+    let ch = s[i]
+    if ch >= '0' && ch <= '9' {
+      i += 1
+    } else {
+      return false
+    }
+  }
+  true
+}
+
+///|
 fn ordered_bullet_content_start(
   ts : Array[Token],
   ls : Int,
@@ -191,10 +196,14 @@ fn ordered_bullet_content_start(
     return (false, ls)
   }
   match ts[ls] {
-    Token::Digit(_) =>
-      match ts[ls + 1] {
-        Token::Dot => (true, ls + 2)
-        _ => (false, ls)
+    Token::Text(s) =>
+      if is_digits_only(s) {
+        match ts[ls + 1] {
+          Token::Dot => (true, ls + 2)
+          _ => (false, ls)
+        }
+      } else {
+        (false, ls)
       }
     _ => (false, ls)
   }
@@ -207,24 +216,20 @@ pub fn parse(input : String) -> (Array[Block], String?) {
   let mut pos : Int = 0
   let n = ts.length()
   while pos < n {
-    // 读一行
     let (ls, le, next_pos, _) = read_line(ts, pos)
     pos = next_pos
-
-    // 空行：跳过
     if ls == le {
       continue
     }
 
-    // 代码块起始？
-    let (is_fence, _fcount, lang) = try_parse_fence_start(ts, ls, le)
+    // fenced code block
+    let (is_fence, _cnt, lang) = try_parse_fence_start(ts, ls, le)
     if is_fence {
-      // 收集直至匹配的结束围栏
       let lines : Array[String] = []
       while pos < n {
         let (ls2, le2, next2, _) = read_line(ts, pos)
-        let (is_end, _, _) = try_parse_fence_start(ts, ls2, le2)
-        if is_end {
+        let (endf, _, _) = try_parse_fence_start(ts, ls2, le2)
+        if endf {
           pos = next2
           break
         }
@@ -244,19 +249,16 @@ pub fn parse(input : String) -> (Array[Block], String?) {
       continue
     }
 
-    // 标题？行首 Hash(1..6)
-    let is_heading = is_heading_start(ts, ls)
-    if is_heading {
-      // 行余下文本
-      let raw = line_tokens_to_string(ts, ls + 1, le)
-      let content = ltrim_spaces(raw)
-      // 读取等级
-      let level = heading_level_at(ts, ls)
+    // heading
+    let (h_ok, level) = is_heading_start(ts, ls)
+    if h_ok {
+      let idx = skip_leading_space_tokens(ts, ls + 1, le)
+      let content = line_tokens_to_string(ts, idx, le)
       blocks.push(Block::Heading(level, Text::Single(content)))
       continue
     }
 
-    // 引用块：以 '>' 开头的连续行，当前仅产生一个 BlockQuote 占位并消费这些行
+    // blockquote (placeholder)
     if is_blockquote_line(ts, ls, le) {
       while pos < n {
         let (lsq, leq, nextq, _) = read_line(ts, pos)
@@ -272,22 +274,19 @@ pub fn parse(input : String) -> (Array[Block], String?) {
       continue
     }
 
-    // 列表：无序或有序，按同类分组
-    let (is_unorder, ustart) = unordered_bullet_content_start(ts, ls, le)
-    let (is_order, ostart) = if is_unorder {
+    // lists
+    let (u_ok, ustart) = unordered_bullet_content_start(ts, ls, le)
+    let (o_ok, ostart) = if u_ok {
       (false, ls)
     } else {
       ordered_bullet_content_start(ts, ls, le)
     }
-    if is_unorder || is_order {
-      let ordered = if is_order { true } else { false }
+    if u_ok || o_ok {
+      let ordered = if o_ok { true } else { false }
       blocks.push(Block::List)
-      // 消费连续的同类列表项
-      // 我们已经取了当前行的 ls/le，下一行在 pos
-      // 使用当前行先加入，再在 while 中读取后续行
-      let first_cs = if is_unorder { ustart } else { ostart }
-      let first_raw = line_tokens_to_string(ts, first_cs, le)
-      let first_label = ltrim_spaces(first_raw)
+      let cs0 = if ordered { ostart } else { ustart }
+      let idx0 = skip_leading_space_tokens(ts, cs0, le)
+      let first_label = line_tokens_to_string(ts, idx0, le)
       blocks.push(Block::ListItem(ordered, Text::Single(first_label)))
       while pos < n {
         let (ls4, le4, next4, _) = read_line(ts, pos)
@@ -305,26 +304,34 @@ pub fn parse(input : String) -> (Array[Block], String?) {
           break
         }
         let cs = if ordered { cs_o } else { cs_u }
-        let raw = line_tokens_to_string(ts, cs, le4)
-        let label = ltrim_spaces(raw)
+        let idx = skip_leading_space_tokens(ts, cs, le4)
+        let label = line_tokens_to_string(ts, idx, le4)
         blocks.push(Block::ListItem(ordered, Text::Single(label)))
         pos = next4
       }
       continue
     }
 
-    // 段落：收集连续非空行，合并成单个 Paragraph
+    // paragraph: accumulate non-empty lines until next block
     let lines : Array[String] = []
     lines.push(line_tokens_to_string(ts, ls, le))
-    // 向后看：如果下一行不是空且不是围栏开始也不是标题，则并入段落
     while pos < n {
       let (ls3, le3, next3, _) = read_line(ts, pos)
       if ls3 == le3 {
         break
-      } // 空行终止段落
+      }
       let (f2, _, _) = try_parse_fence_start(ts, ls3, le3)
-      let h2 = is_heading_start(ts, ls3)
-      if f2 || h2 {
+      let (h2, _) = is_heading_start(ts, ls3)
+      if f2 || h2 || is_blockquote_line(ts, ls3, le3) {
+        break
+      }
+      let (uu, _) = unordered_bullet_content_start(ts, ls3, le3)
+      let (oo, _) = if uu {
+        (false, ls3)
+      } else {
+        ordered_bullet_content_start(ts, ls3, le3)
+      }
+      if uu || oo {
         break
       }
       lines.push(line_tokens_to_string(ts, ls3, le3))

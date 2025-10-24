@@ -6,15 +6,32 @@ fn debug_blocks(Array[Block]) -> Array[String]
 
 fn debug_tokens(Array[Token]) -> Array[String]
 
+fn decode(BytesView) -> String raise Malformed
+
+fn decode_lossy(BytesView) -> String
+
+fn encode(StringView) -> Bytes
+
 fn parse(String) -> (Array[Block], String?)
 
 fn render_blocks_html(Array[Block]) -> String
 
+fn render_blocks_html_utf8(Array[Block]) -> String
+
 fn render_html(String) -> (String, String?)
+
+fn render_html_from_utf8_bytes(BytesView) -> (String, String?) raise Malformed
+
+fn render_html_from_utf8_bytes_lossy(BytesView) -> (String, String?)
+
+fn render_html_page(String) -> (String, String?)
+
+fn render_html_utf8(String) -> (String, String?)
 
 fn tokenize(String) -> (Array[Token], String?)
 
 // Errors
+pub suberror Malformed BytesView
 
 // Types and methods
 pub enum Block {
@@ -47,8 +64,19 @@ pub enum Token {
   GreaterThan
   Dash
   Dot
-  Digit(Int)
 }
+
+type Utf8
+#as_free_fn
+fn Utf8::of_bytes(Bytes) -> Self raise Malformed
+#as_free_fn
+fn Utf8::of_bytesview(BytesView) -> Self raise Malformed
+fn Utf8::output(Self, &Logger) -> Unit // from trait `Show`
+fn Utf8::to_bytes(Self) -> Bytes
+fn Utf8::to_json(Self) -> Json // from trait `ToJson`
+fn Utf8::to_string(Self) -> String
+impl Show for Utf8
+impl ToJson for Utf8
 
 // Type aliases
 

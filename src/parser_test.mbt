@@ -7,7 +7,7 @@ test "parse headings paragraphs codeblocks" {
   inspect(
     debug_blocks(blocks),
     content=(
-      #|["Heading(1, Single(\"3284105116108101\"))", "Paragraph(Multi([\"112971149732108105110101321\", \"112971149732108105110101322\"]))", "CodeBlock(\"10897110103\", Multi([\"1081051101013297\", \"1081051101013298\"]))"]
+      #|["Heading(1, Single(\"Title\"))", "Paragraph(Multi([\"para line 1\", \"para line 2\"]))", "CodeBlock(\"lang\", Multi([\"line a\", \"line b\"]))"]
     ),
   )
   inspect(err, content="None")
@@ -22,7 +22,7 @@ test "parse blockquote and paragraph" {
   inspect(
     debug_blocks(blocks),
     content=(
-      #|["BlockQuote", "Paragraph(Single(\"1129711497329710211610111432113117111116101\"))"]
+      #|["BlockQuote", "Paragraph(Single(\"para after quote\"))"]
     ),
   )
   inspect(err, content="None")
@@ -37,7 +37,7 @@ test "parse unordered and ordered lists" {
   inspect(
     debug_blocks(blocks),
     content=(
-      #|["List", "ListItem(false, Single(\"3210511610110932111110101\"))", "ListItem(false, Single(\"3210511610110932116119111\"))", "List", "ListItem(true, Single(\"32102105114115116\"))", "ListItem(true, Single(\"3211510199111110100\"))"]
+      #|["List", "ListItem(false, Single(\"item one\"))", "ListItem(false, Single(\"item two\"))", "List", "ListItem(true, Single(\"first\"))", "ListItem(true, Single(\"second\"))"]
     ),
   )
   inspect(err, content="None")

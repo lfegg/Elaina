@@ -4,6 +4,10 @@
     {
       "path": "lfegg/Elaina",
       "alias": "lib"
+    },
+    {
+      "path": "tonyfettes/utf8",
+      "alias": "utf8"
     }
   ]
 }
