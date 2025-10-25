@@ -1,1 +1,0 @@
-moon run ./src/main.mbt | Out-File -FilePath ./output.html -Encoding utf8

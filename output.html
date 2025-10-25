@@ -1,19 +1,19 @@
-<h1>fight-club</h1>
-<h2>game introduction</h2>
-<p>Fight Club is a text-based adventure game where players navigate through a series of challenges and battles in a dystopian world. Players must make strategic decisions, manage resources, and engage in combat to survive and thrive in the harsh environment.</p>
-<h2>installation</h2>
-<p>To install Fight Club, follow these steps:  </p>
-<ol>
-  <li>Clone the repository: `git clone</li>
-  <li>Navigate to the project directory: `cd fight-club`</li>
-</ol>
-<h2>usage</h2>
-<p>To start the game, run the following command:</p>
-<pre><code class="language-moonbit ">let a = 1 + 1
-moon run ./src/main.mbt</code></pre>
-<p>This will launch the game in your terminal. Follow the on-screen prompts to play.</p>
-<h2>contribution</h2>
+<h2>Markdown 解析器</h2>
+<h3>介绍 </h3>
+<p>这是一个用 moonbit 语言编写用于解析 Markdown 文本的轻量解析器</p>
 <ul>
-  <li>nihao</li>
-  <li>你好</li>
+  <li>支持常见的 Markdown 语法</li>
+  <li>把 Markdown 格式的文本转换为 HTML 格式</li>
+  <li>运行主函数能把 Markdown 文件转换为 HTML 文件并输出出来</li>
+  <li>使用了 fs 库进行文件操作（更新内容）</li>
 </ul>
+<h3>使用方法</h3>
+<ol>
+  <li>克隆代码库到本地</li>
+  <li>传入 Markdown 文件路径作为参数， 修改输出文件路径</li>
+  <li>运行主函数进行转换，打开生成的 HTML 文件</li>
+</ol>
+<pre><code class="language-shell">    moon run ./src/main.mbt</code></pre>
+<h3>示例</h3>
+<p>在 README.md 同目录下删除 output.html 文件（如果存在的话）  <br/>
+运行主函数后会生成 output.html 文件，打开即可看在浏览器中看到本文档的 HTML 渲染效果</p>
