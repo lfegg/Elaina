@@ -1,19 +1,76 @@
-<h2>Markdown 解析器</h2>
-<h3>介绍 </h3>
-<p>这是一个用 moonbit 语言编写用于解析 Markdown 文本的轻量解析器</p>
+<h1>Elaina — MoonBit Markdown 解析器</h1>
+<p>将 Markdown 文本解析为 HTML 的轻量级解析器与渲染器，使用 MoonBit 编写。</p>
+<h2>✨ 特性</h2>
 <ul>
-  <li>支持常见的 Markdown 语法</li>
-  <li>把 Markdown 格式的文本转换为 HTML 格式</li>
-  <li>运行主函数能把 Markdown 文件转换为 HTML 文件并输出出来</li>
-  <li>使用了 fs 库进行文件操作（更新内容）</li>
+  <li>词法分析 → 语法分析 → HTML 渲染的清晰三段式流水线  </li>
+  <li>标题（#1–#6）</li>
+  <li>段落与多行段落换行（渲染为 `<br/>`）</li>
+  <li>围栏代码块（以反引号开始/结束，支持语言 class，如 `class="language-js"`）</li>
+  <li>无序列表（`-` 或单个 `*`）与有序列表（`1.`、`2.`…）</li>
+  <li>引用块的占位识别（当前渲染为空 `<blockquote></blockquote>`，后续完善）</li>
+  <li>UTF‑8 友好：提供 `render_html_utf8` 与完整页面 `render_html_page`</li>
+  <li>直接写文件，避免 PowerShell 输出重定向导致的中文乱码</li>
 </ul>
-<h3>使用方法</h3>
-<ol>
-  <li>克隆代码库到本地</li>
-  <li>传入 Markdown 文件路径作为参数， 修改输出文件路径</li>
-  <li>运行主函数进行转换，打开生成的 HTML 文件</li>
-</ol>
-<pre><code class="language-shell">    moon run ./src/main.mbt</code></pre>
-<h3>示例</h3>
-<p>在 README.md 同目录下删除 output.html 文件（如果存在的话）  <br/>
-运行主函数后会生成 output.html 文件，打开即可看在浏览器中看到本文档的 HTML 渲染效果</p>
+<blockquote></blockquote>
+<h2>📦 项目结构</h2>
+<pre><code class="language-text">src/
+    ast.mbt         # AST 定义（Text / Block 等）
+    tokenizer.mbt   # 词法分析：把字符流切分为 Token
+    parser.mbt      # 语法分析：把 Token 流构建为 Block 列表
+    renderer.mbt    # 渲染：把 Block 渲染为 HTML（含 UTF-8 版本与完整页面）
+    main.mbt        # 示例入口：读取 README.md，输出 output.html
+    *_test.mbt      # 组件级快照测试（tokenizer/parser/renderer/utf8等）</code></pre>
+<h2>🚀 快速开始</h2>
+<p>前置：已安装 MoonBit 工具链（参考 MoonBit 官方文档）。</p>
+<ul>
+  <li>运行示例入口（读取仓库根目录的 `README.md`，在同目录生成 `output.html`）：</li>
+</ul>
+<pre><code class="language-powershell">moon run ./src/main.mbt</code></pre>
+<ul>
+  <li>打开生成的 `output.html` 查看 HTML 渲染结果。</li>
+</ul>
+<blockquote></blockquote>
+<h2>🛠️ 自定义输入/输出路径</h2>
+<p>`src/main.mbt` 中示例默认：</p>
+<pre><code class="language-moonbit">let context = @fs.read_file_to_string("./README.md")
+@fs.write_string_to_file("./output.html", html)</code></pre>
+<p>按需修改为你的 Markdown 路径与输出路径即可。</p>
+<p>如需生成带 `<head>` 与 UTF‑8 meta 的完整 HTML 页面，建议使用 `render_html_page`：</p>
+<pre><code class="language-moonbit">let (page, err) = render_html_page(context)
+@fs.write_string_to_file("./output.html", page)</code></pre>
+<h2>📚 API 速览</h2>
+<p>渲染入口均返回 `(String, String?)`，第二个值为可选错误信息：</p>
+<ul>
+  <li>`render_html(input)`：渲染为 HTML 片段（仅 `<body>` 内容）</li>
+  <li>`render_html_utf8(input)`：UTF‑8 直出版（保留中文，安全转义特殊字符）</li>
+  <li>`render_html_page(input)`：完整 HTML 文档（含 `<meta charset="utf-8">`）</li>
+  <li>`render_html_from_utf8_bytes_lossy(bytes)`：从 UTF‑8 字节视图宽松解码后渲染</li>
+</ul>
+<p>示例：</p>
+<pre><code class="language-moonbit">let md = "# 标题nn这是一个段落n"
+let (html, err) = render_html(md)
+match err {
+    None => println(html)
+    Some(e) => println(e)
+}</code></pre>
+<h2>🧠 设计概览</h2>
+<ul>
+  <li>Tokenizer：聚合连续普通字符为 `Text`，识别 `#`、`*`、`` ` ``、`[`、`]`、`(`、`)`、`!`、`>`、`-`、`.` 等标记；兼容 CRLF/LF</li>
+  <li>Parser：</li>
+</ul>
+<p>    - 标题：行首 `#`×N + 可选空格 + 文本<br/>
+    - 围栏代码块：行首为反引号(>=3)，直到下一处围栏；首行余部作为语言标识<br/>
+    - 列表：无序（`-`/`*`）与有序（数字+`.`）<br/>
+    - 段落：连续非空行合并，换行为 `<br/>`<br/>
+    - 引用：占位（后续渲染为含内容的 `<blockquote>`）</p>
+<ul>
+  <li>Renderer：提供普通版与 UTF‑8 直出版；可输出完整 HTML 页面</li>
+</ul>
+<h2>🗺️ 路线图</h2>
+<ul>
+  <li>行内语法：强调、加粗、行内代码、链接、图片</li>
+  <li>引用内容渲染与嵌套列表</li>
+  <li>水平分割线、表格与自动链接</li>
+  <li>严格 HTML 转义（当前 `html_escape` 为直通实现）</li>
+  <li>更完善的错误处理与诊断信息</li>
+</ul>
