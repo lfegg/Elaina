@@ -22,7 +22,7 @@ pub enum Block {
   Paragraph(Text) // 段落文本：可单行或多行
   Heading(Int, Text) // 标题文本：一般单行，但用 Text 以统一模型
   CodeBlock(String, Text) // language, code：代码块通常多行
-  BlockQuote
+  BlockQuote(Array[Block]) // 引用块，包含子块
   List
-  ListItem(Bool, Text) // is_ordered, label：标签文本
+  ListItem(Bool, Text, Array[Block]) // is_ordered, label, children：支持嵌套子块（如代码块）
 }

@@ -1,0 +1,63 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "lfegg/Elaina/src"
+
+// Values
+fn debug_blocks(Array[Block]) -> Array[String]
+
+fn debug_tokens(Array[Token]) -> Array[String]
+
+fn parse(String) -> (Array[Block], String?)
+
+fn render_blocks_html(Array[Block]) -> String
+
+fn render_blocks_html_utf8(Array[Block]) -> String
+
+fn render_html(String) -> (String, String?)
+
+fn render_html_from_utf8_bytes_lossy(BytesView) -> (String, String?)
+
+fn render_html_page(String) -> (String, String?)
+
+fn render_html_utf8(String) -> (String, String?)
+
+fn tokenize(String) -> (Array[Token], String?)
+
+// Errors
+
+// Types and methods
+pub enum Block {
+  Paragraph(Text)
+  Heading(Int, Text)
+  CodeBlock(String, Text)
+  BlockQuote(Array[Block])
+  List
+  ListItem(Bool, Text, Array[Block])
+}
+
+type Inline
+
+pub enum Text {
+  Single(String)
+  Multi(Array[String])
+}
+
+pub enum Token {
+  Text(String)
+  Newline
+  Hash(Int)
+  Star(Int)
+  Backtick(Int)
+  OpenBracket
+  CloseBracket
+  OpenParen
+  CloseParen
+  Bang
+  GreaterThan
+  Dash
+  Dot
+}
+
+// Type aliases
+
+// Traits
+
